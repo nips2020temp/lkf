@@ -6,7 +6,6 @@ from integrator import Integrator
 
 from typing import Callable
 import numpy as np
-import scipy.integrate as scint
 
 class KF(LSProcess):
 	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float):
@@ -43,7 +42,7 @@ class KF(LSProcess):
 		self.r.integrate(self.t + self.dt)
 		x_t = np.squeeze(self.r.y.reshape((self.ndim, self.ndim+1))[:, :1])
 		err_t = z_t - x_t@self.H.T
-		return x_t, err_t
+		return x_t.copy(), err_t # x_t variable gets reused somewhere...
 
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
@@ -61,7 +60,7 @@ if __name__ == '__main__':
 		x_t, err_t = f(z_t)
 		hist_z.append(z_t)
 		hist_t.append(z.t)
-		hist_x.append(x_t.copy()) # I have NO idea why #fuckpython
+		hist_x.append(x_t) 
 		hist_err.append(err_t)
 	hist_t = np.array(hist_t)
 	hist_z = np.array(hist_z)
