@@ -12,13 +12,13 @@ def lkf_system(t, vars, z_t, err_t, err_tau, F_hat_t, H, Q, R, tau):
 	F_t = F_hat_t - eta_t
 	K_t = P_t@H@np.linalg.inv(R)
 	d_x = F_t@x_t + K_t@(z_t - H@x_t)
-	d_P = F_t@P_t + P_t@F_t + Q - K_t@R@K_t.T
+	d_P = F_t@P_t + P_t@F_t.T + Q - K_t@R@K_t.T
 	return [d_x, x_P]
 
 def filter(z: Callable, F_hat: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau: float, t_max: float):
 	x_0 = np.linalg.inv(H)@z(0)
 	P_0 = x_0@x_0.T
-	r = scint.ode(lkf_system).set_integrator('dop853')
+	r = scint.ode(lkf_system).set_integrator('dopri5')
 	r.set_initial_value((x_0, P_0), 0.)
 
 	hist_t = [0]
