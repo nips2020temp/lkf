@@ -21,6 +21,7 @@ class Integrator:
 		self.g = g
 		self.f_params = ()
 		self.g_params = ()
+		self.dy = np.zeros(ndim)
 
 	def set_initial_value(self, x0: np.ndarray, t0: float = 0.0):
 		self.t = t0
@@ -38,6 +39,7 @@ class Integrator:
 		dy = self.f(self.t, self.y, *self.f_params) * dt + dw @ self.g(self.t, self.y, *self.g_params).T
 		self.t += dt
 		self.y += dy
+		self.dy = dy
 
 
 # TODO: stochastic Runge-Kutta 2nd-order integrator

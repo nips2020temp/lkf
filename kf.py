@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
 	dt = 0.001
 	n = 10000
-	z = Oscillator(dt, 0.0, 1.0)
+	z = Oscillator(dt, 0.01, 2.0)
 	f = KF(z.x0, z.F, z.H, z.Q, z.R, dt)
 	hist_t = []
 	hist_z = []

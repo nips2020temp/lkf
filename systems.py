@@ -16,10 +16,6 @@ class LSProcess:
 		self.F = F
 		self.H = H
 		self.dt = dt
-		# var_w = np.ones((x0.shape[0], 1)) * var_w
-		# var_v = np.ones((x0.shape[0], 1)) * var_v
-		# self.Q = var_w@var_w.T
-		# self.R = var_v@var_v.T
 		self.Q = np.eye(x0.shape[0]) * var_w
 		self.R = np.eye(x0.shape[0]) * var_v
 
