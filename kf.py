@@ -3,6 +3,7 @@
 
 from systems import Oscillator, LSProcess
 from integrator import Integrator
+from utils import set_seed
 
 from typing import Callable
 import numpy as np
@@ -47,10 +48,15 @@ class KF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
+	set_seed(9001)
+
 	dt = 0.001
-	n = 10000
-	z = Oscillator(dt, 0.01, 2.0)
-	f = KF(z.x0, z.F, z.H, z.Q, z.R, dt)
+	n = 48000
+	z = Oscillator(dt, 0.0, 1.0)
+	eta = np.random.normal(0.0, 0.01, (2, 2))
+	print(eta)
+	F_hat = lambda t: z.F(t) + eta
+	f = KF(z.x0, F_hat, z.H, z.Q, z.R, dt)
 	hist_t = []
 	hist_z = []
 	hist_x = []
@@ -66,11 +72,15 @@ if __name__ == '__main__':
 	hist_z = np.array(hist_z)
 	hist_x = np.array(hist_x)
 	hist_err = np.array(hist_err)
-	fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+	fig, axs = plt.subplots(1, 3, figsize=(20, 5))
+	fig.suptitle('KF')
 	axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
 	axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
 	axs[0].legend()
+	axs[0].set_title('System')
 	axs[1].plot(hist_t, hist_err[:,0])
+	axs[1].set_title('Axis 1 error')
 	axs[2].plot(hist_t, hist_err[:,1])
+	axs[2].set_title('Axis 2 error')
 	plt.show()
 

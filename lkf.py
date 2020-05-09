@@ -25,12 +25,13 @@ class LKF(LSProcess):
 			x_t, P_t, eta_t = state[:, :1], state[:, 1:3], state[:, 3:]
 			z_t = z_t[:, np.newaxis]
 			if t > self.tau: 
-				err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[0][:,np.newaxis]
-				tau_n = len(err_hist)
-				tau_h = tau_n * self.dt
+				tau_t = np.random.normal(tau, tau / 10)
+				# print(tau_t)
+				tau_n = min(int(tau_t / self.dt), len(err_hist))
+				err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[-tau_n][:,np.newaxis]
 				H_inv = np.linalg.inv(self.H)
 				P_inv = np.linalg.inv(P_t)
-				E_zz = (err_t@err_t.T - err_tau@err_tau.T) / tau_h
+				E_zz = (err_t@err_t.T - err_tau@err_tau.T) / tau_t
 				# E_z1 = (err_t - err_tau) / tau_h
 				# E_z2 = sum(err_hist)[:, np.newaxis] / tau_n
 				# eta_t = H_inv@(E_zz - E_z1@E_z2.T - E_z2@E_z1.T)@H_inv.T@P_inv / 2
@@ -67,7 +68,7 @@ class LKF(LSProcess):
 		x_t = np.squeeze(self.r.y.reshape(self.ode_shape)[:, :1])
 		err_t = z_t - x_t@self.H.T
 		self.err_hist.append(err_t)
-		if self.t > self.tau:
+		if self.t > 2 * self.tau:
 			self.err_hist = self.err_hist[1:]
 		return x_t.copy(), err_t, self.eta_t # x_t variable gets reused somewhere...
 
@@ -85,11 +86,12 @@ if __name__ == '__main__':
 	set_seed(9001)
 
 	dt = 0.001
-	n = 50000
+	n = 48000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
+	print(eta)
 	F_hat = lambda t: z.F(t) + eta
-	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.25)
+	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.4)
 	hist_t = []
 	hist_z = []
 	hist_x = []
@@ -109,11 +111,16 @@ if __name__ == '__main__':
 	hist_err = np.array(hist_err)
 	hist_eta = np.array(hist_eta)
 	print(hist_eta)
-	fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+	# fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+	fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+	fig.suptitle('LKF')
 	axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
 	axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
 	axs[0].legend()
+	axs[0].set_title('System')
 	axs[1].plot(hist_t, hist_err[:,0])
+	axs[1].set_title('Axis 1 error')
 	axs[2].plot(hist_t, hist_err[:,1])
-	axs[3].plot(hist_t, hist_eta)
+	axs[2].set_title('Axis 2 error')
+	# axs[3].plot(hist_t, hist_eta)
 	plt.show()
