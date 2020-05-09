@@ -89,8 +89,8 @@ if __name__ == '__main__':
 	n = 48000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
-	print(eta)
 	F_hat = lambda t: z.F(t) + eta
+	print(F_hat(0))
 	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.4)
 	hist_t = []
 	hist_z = []

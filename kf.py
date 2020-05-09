@@ -53,9 +53,9 @@ if __name__ == '__main__':
 	dt = 0.001
 	n = 48000
 	z = Oscillator(dt, 0.0, 1.0)
-	eta = np.random.normal(0.0, 0.01, (2, 2))
-	print(eta)
+	eta = np.random.normal(0.0, 0.0, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
+	print(F_hat(0))
 	f = KF(z.x0, F_hat, z.H, z.Q, z.R, dt)
 	hist_t = []
 	hist_z = []
@@ -73,7 +73,7 @@ if __name__ == '__main__':
 	hist_x = np.array(hist_x)
 	hist_err = np.array(hist_err)
 	fig, axs = plt.subplots(1, 3, figsize=(20, 5))
-	fig.suptitle('KF')
+	fig.suptitle('Ground truth')
 	axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
 	axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
 	axs[0].legend()
