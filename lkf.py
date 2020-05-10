@@ -83,10 +83,10 @@ class LKF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(9001)
+	set_seed(4001)
 
 	dt = 0.001
-	n = 48000
+	n = 25000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
@@ -111,16 +111,19 @@ if __name__ == '__main__':
 	hist_err = np.array(hist_err)
 	hist_eta = np.array(hist_eta)
 	print(hist_eta)
-	# fig, axs = plt.subplots(1, 4, figsize=(20, 5))
-	fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+	fig, axs = plt.subplots(1, 5, figsize=(20, 5))
 	fig.suptitle('LKF')
 	axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
 	axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
 	axs[0].legend()
 	axs[0].set_title('System')
-	axs[1].plot(hist_t, hist_err[:,0])
-	axs[1].set_title('Axis 1 error')
-	axs[2].plot(hist_t, hist_err[:,1])
-	axs[2].set_title('Axis 2 error')
+	axs[1].plot(hist_t, hist_z[:,0], color='blue', label='obs')
+	axs[1].plot(hist_t, hist_x[:,0], color='orange', label='est')
+	axs[2].plot(hist_t, hist_z[:,1], color='blue', label='obs')
+	axs[2].plot(hist_t, hist_x[:,1], color='orange', label='est')
+	axs[3].plot(hist_t, hist_err[:,0])
+	axs[3].set_title('Axis 1 error')
+	axs[4].plot(hist_t, hist_err[:,1])
+	axs[4].set_title('Axis 2 error')
 	# axs[3].plot(hist_t, hist_eta)
 	plt.show()

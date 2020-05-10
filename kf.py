@@ -32,7 +32,7 @@ class KF(LSProcess):
 			return np.zeros((rep_ndim, rep_ndim))
 
 		x0 = x0[:, np.newaxis]
-		P0 = x0@x0.T
+		P0 = np.eye(self.ndim)
 		iv = np.concatenate((x0, P0), axis=1).ravel() # Flatten for integrate.ode
 		self.r = Integrator(f, g, rep_ndim)
 		self.r.set_initial_value(iv, 0.)
@@ -48,10 +48,10 @@ class KF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(9001)
+	set_seed(4001)
 
 	dt = 0.001
-	n = 48000
+	n = 25000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
@@ -72,15 +72,19 @@ if __name__ == '__main__':
 	hist_z = np.array(hist_z)
 	hist_x = np.array(hist_x)
 	hist_err = np.array(hist_err)
-	fig, axs = plt.subplots(1, 3, figsize=(20, 5))
+	fig, axs = plt.subplots(1, 5, figsize=(20, 5))
 	fig.suptitle('KF')
 	axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
 	axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
 	axs[0].legend()
 	axs[0].set_title('System')
-	axs[1].plot(hist_t, hist_err[:,0])
-	axs[1].set_title('Axis 1 error')
-	axs[2].plot(hist_t, hist_err[:,1])
-	axs[2].set_title('Axis 2 error')
+	axs[1].plot(hist_t, hist_z[:,0], color='blue', label='obs')
+	axs[1].plot(hist_t, hist_x[:,0], color='orange', label='est')
+	axs[2].plot(hist_t, hist_z[:,1], color='blue', label='obs')
+	axs[2].plot(hist_t, hist_x[:,1], color='orange', label='est')
+	axs[3].plot(hist_t, hist_err[:,0])
+	axs[3].set_title('Axis 1 error')
+	axs[4].plot(hist_t, hist_err[:,1])
+	axs[4].set_title('Axis 2 error')
 	plt.show()
 
