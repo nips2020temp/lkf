@@ -56,6 +56,13 @@ class SpiralSink(LSProcess):
 		x0 = np.array([[-1.], [-1.]])
 		super().__init__(x0, F, H, dt, var_w, var_v)
 
+class Saddle(LSProcess):
+	def __init__(self, dt: float, var_w: float, var_v: float):
+		F = lambda t: np.array([[-1.,1.],[-1.25, -0.45]])
+		H = np.eye(2)
+		x0 = np.array([[0.70,-2.55],[-0.10, -2.50]])
+		super().__init__(x0, F, H, dt, var_w, var_v)
+
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 

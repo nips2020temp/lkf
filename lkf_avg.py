@@ -9,13 +9,13 @@ from typing import Callable
 import numpy as np
 
 class LKF(LSProcess):
-	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau: float = float('inf')):
+	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau_rng: list):
 		self.F = F
 		self.H = H
 		self.Q = Q
 		self.R = R
 		self.dt = dt
-		self.tau = tau
+		self.tau_rng = tau_rng
 		self.ndim = x0.shape[0]
 		self.err_hist = []
 		self.eta_t = np.zeros((self.ndim, self.ndim)) # temp var..
@@ -24,22 +24,18 @@ class LKF(LSProcess):
 			state = state.reshape(self.ode_shape)
 			x_t, P_t, eta_t = state[:, :1], state[:, 1:3], state[:, 3:]
 			z_t = z_t[:, np.newaxis]
-			if t > self.tau: 
-				tau_t = np.random.normal(tau, tau / 10)
-				# print(tau_t)
-				tau_n = min(int(tau_t / self.dt), len(err_hist))
-				err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[-tau_n][:,np.newaxis]
+			eta_t = np.zeros((self.ndim, self.ndim))
+			if t > self.tau_rng[-1]: # TODO: warmup case?
 				H_inv = np.linalg.inv(self.H)
 				P_inv = np.linalg.inv(P_t)
-				E_zz = (err_t@err_t.T - err_tau@err_tau.T) / tau_t
-				# E_z1 = (err_t - err_tau) / tau_h
-				# E_z2 = sum(err_hist)[:, np.newaxis] / tau_n
-				# eta_t = H_inv@(E_zz - E_z1@E_z2.T - E_z2@E_z1.T)@H_inv.T@P_inv / 2
-				eta_t = H_inv@E_zz@H_inv.T@P_inv / 2
+				for tau in self.tau_rng:
+					tau_n = min(int(tau / self.dt), len(err_hist))
+					err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[-tau_n][:,np.newaxis]
+					E_zz = (err_t@err_t.T - err_tau@err_tau.T) / tau
+					eta_t += H_inv@E_zz@H_inv.T@P_inv / 2
+				eta_t /= len(self.tau_rng)
 				eta_t = np.clip(eta_t, a_min=-1, a_max=1)
 				self.eta_t = eta_t # TODO fix hack
-			else:
-				eta_t = np.zeros((self.ndim, self.ndim)) # TODO warmup case?
 			F_est = F_t - eta_t
 			K_t = P_t@self.H@np.linalg.inv(self.R)
 			d_x = F_est@x_t + K_t@(z_t - self.H@x_t)
@@ -68,7 +64,7 @@ class LKF(LSProcess):
 		x_t = np.squeeze(self.r.y.reshape(self.ode_shape)[:, :1])
 		err_t = z_t - x_t@self.H.T
 		self.err_hist.append(err_t)
-		if self.t > 2 * self.tau:
+		if self.t > self.tau_rng[-1]:
 			self.err_hist = self.err_hist[1:]
 		return x_t.copy(), err_t, self.eta_t # x_t variable gets reused somewhere...
 
@@ -83,7 +79,7 @@ class LKF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(5001)
+	set_seed(1001)
 
 	dt = 0.001
 	n = 25000
@@ -91,7 +87,9 @@ if __name__ == '__main__':
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
-	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.5)
+	tau_rng = np.linspace(0.1, 0.2, 100)
+	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau_rng)
+
 	hist_t = []
 	hist_z = []
 	hist_x = []
@@ -112,30 +110,12 @@ if __name__ == '__main__':
 	hist_eta = np.array(hist_eta)
 	print(hist_eta)
 
-	fig, axs = plt.subplots(1, 5, figsize=(20, 5))
-	fig.suptitle('LKF')
+	fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 	axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
 	axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
 	axs[0].legend()
 	axs[0].set_title('System')
-	axs[1].plot(hist_t, hist_z[:,0], color='blue', label='obs')
-	axs[1].plot(hist_t, hist_x[:,0], color='orange', label='est')
-	axs[2].plot(hist_t, hist_z[:,1], color='blue', label='obs')
-	axs[2].plot(hist_t, hist_x[:,1], color='orange', label='est')
-	axs[3].plot(hist_t, hist_err[:,0])
-	axs[3].set_title('Axis 1 error')
-	axs[4].plot(hist_t, hist_err[:,1])
-	axs[4].set_title('Axis 2 error')
-
-	# axs[3].plot(hist_t, hist_eta)
-
-	# compact plot
-	# fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-	# axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
-	# axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
-	# axs[0].legend()
-	# axs[0].set_title('System')
-	# axs[1].plot(hist_t, hist_err[:,0])
-	# axs[1].set_title('Axis 1 error')
+	axs[1].plot(hist_t, hist_err[:,0])
+	axs[1].set_title('Axis 1 error')
 
 	plt.show()
