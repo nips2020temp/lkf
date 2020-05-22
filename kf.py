@@ -48,7 +48,7 @@ class KF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(5001)
+	set_seed(1001)
 
 	dt = 0.001
 	n = 25000

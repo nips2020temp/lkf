@@ -36,7 +36,7 @@ class LKF(LSProcess):
 				# E_z2 = sum(err_hist)[:, np.newaxis] / tau_n
 				# eta_t = H_inv@(E_zz - E_z1@E_z2.T - E_z2@E_z1.T)@H_inv.T@P_inv / 2
 				eta_t = H_inv@E_zz@H_inv.T@P_inv / 2
-				eta_t = np.clip(eta_t, a_min=-1, a_max=1)
+				# eta_t = np.clip(eta_t, a_min=-1, a_max=1)
 				self.eta_t = eta_t # TODO fix hack
 			else:
 				eta_t = np.zeros((self.ndim, self.ndim)) # TODO warmup case?
@@ -86,12 +86,15 @@ if __name__ == '__main__':
 	set_seed(5001)
 
 	dt = 0.001
-	n = 25000
+	n = 100000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
-	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.5)
+	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.15)
+
+	max_err = .2
+
 	hist_t = []
 	hist_z = []
 	hist_x = []
@@ -104,28 +107,49 @@ if __name__ == '__main__':
 		hist_t.append(z.t)
 		hist_x.append(x_t) 
 		hist_err.append(err_t)
-		hist_eta.append(np.linalg.norm(eta_t)) # infinitesimal variation
+		hist_eta.append(eta_t) # variation
+		if np.linalg.norm(err_t) > max_err:
+			print('Error overflowed!')
+			break
+
 	hist_t = np.array(hist_t)
 	hist_z = np.array(hist_z)
 	hist_x = np.array(hist_x)
 	hist_err = np.array(hist_err)
 	hist_eta = np.array(hist_eta)
-	print(hist_eta)
 
-	fig, axs = plt.subplots(1, 5, figsize=(20, 5))
+	fig, axs = plt.subplots(2, 4, figsize=(20, 5))
 	fig.suptitle('LKF')
-	axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
-	axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
-	axs[0].legend()
-	axs[0].set_title('System')
-	axs[1].plot(hist_t, hist_z[:,0], color='blue', label='obs')
-	axs[1].plot(hist_t, hist_x[:,0], color='orange', label='est')
-	axs[2].plot(hist_t, hist_z[:,1], color='blue', label='obs')
-	axs[2].plot(hist_t, hist_x[:,1], color='orange', label='est')
-	axs[3].plot(hist_t, hist_err[:,0])
-	axs[3].set_title('Axis 1 error')
-	axs[4].plot(hist_t, hist_err[:,1])
-	axs[4].set_title('Axis 2 error')
+	
+	axs[0,0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
+	axs[0,0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
+	axs[0,0].legend()
+	axs[0,0].set_title('System')
+
+	axs[0,1].plot(hist_t, hist_z[:,0], color='blue', label='obs')
+	axs[0,1].plot(hist_t, hist_x[:,0], color='orange', label='est')
+	axs[0,1].set_title('Axis 1')
+
+	axs[0,2].plot(hist_t, hist_z[:,1], color='blue', label='obs')
+	axs[0,2].plot(hist_t, hist_x[:,1], color='orange', label='est')
+	axs[0,2].set_title('Axis 2')
+
+	var_err = eta - hist_eta
+	axs[1,0].plot(hist_t, np.linalg.norm(var_err, axis=1))
+	axs[1,0].set_title('Variation error (norm)')
+
+	var_err_rast = var_err.reshape((var_err.shape[0], 4))
+	# axs[1,1].plot(hist_t, var_err_rast[:,0])
+	# axs[1,1].plot(hist_t, var_err_rast[:,1])
+	# axs[1,1].plot(hist_t, var_err_rast[:,2])
+	axs[1,1].plot(hist_t, var_err_rast[:,3])
+	axs[1,1].set_title('Variation error (rasterized)')
+
+	axs[1,2].plot(hist_t, hist_err[:,0])
+	axs[1,2].set_title('Axis 1 error')
+
+	axs[1,3].plot(hist_t, hist_err[:,1])
+	axs[1,3].set_title('Axis 2 error')
 
 	# axs[3].plot(hist_t, hist_eta)
 

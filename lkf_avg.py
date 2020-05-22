@@ -34,7 +34,7 @@ class LKF(LSProcess):
 					E_zz = (err_t@err_t.T - err_tau@err_tau.T) / tau
 					eta_t += H_inv@E_zz@H_inv.T@P_inv / 2
 				eta_t /= len(self.tau_rng)
-				eta_t = np.clip(eta_t, a_min=-1, a_max=1)
+				# eta_t = np.clip(eta_t, a_min=-1, a_max=1)
 				self.eta_t = eta_t # TODO fix hack
 			F_est = F_t - eta_t
 			K_t = P_t@self.H@np.linalg.inv(self.R)
@@ -79,16 +79,18 @@ class LKF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(1001)
+	set_seed(5001)
 
 	dt = 0.001
-	n = 25000
+	n = 50000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
 	tau_rng = np.linspace(0.1, 0.2, 100)
 	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau_rng)
+
+	max_err = 20
 
 	hist_t = []
 	hist_z = []
@@ -102,20 +104,43 @@ if __name__ == '__main__':
 		hist_t.append(z.t)
 		hist_x.append(x_t) 
 		hist_err.append(err_t)
-		hist_eta.append(np.linalg.norm(eta_t)) # infinitesimal variation
+		hist_eta.append(eta_t) # infinitesimal variation
+		if np.linalg.norm(err_t) > max_err:
+			print('Error overflowed!')
+			break
+
 	hist_t = np.array(hist_t)
 	hist_z = np.array(hist_z)
 	hist_x = np.array(hist_x)
 	hist_err = np.array(hist_err)
 	hist_eta = np.array(hist_eta)
-	print(hist_eta)
 
-	fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-	axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
-	axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
-	axs[0].legend()
-	axs[0].set_title('System')
-	axs[1].plot(hist_t, hist_err[:,0])
-	axs[1].set_title('Axis 1 error')
+	fig, axs = plt.subplots(2, 4, figsize=(20, 5))
+	fig.suptitle('Averaged LKF')
+	
+	axs[0,0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
+	axs[0,0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
+	axs[0,0].legend()
+	axs[0,0].set_title('System')
+
+	axs[0,1].plot(hist_t, hist_z[:,0], color='blue', label='obs')
+	axs[0,1].plot(hist_t, hist_x[:,0], color='orange', label='est')
+	axs[0,1].set_title('Axis 1')
+
+	axs[0,2].plot(hist_t, hist_z[:,1], color='blue', label='obs')
+	axs[0,2].plot(hist_t, hist_x[:,1], color='orange', label='est')
+	axs[0,2].set_title('Axis 2')
+
+	axs[1,0].plot(hist_t, np.linalg.norm(hist_eta, axis=1))
+	axs[1,0].set_title('Variation')
+
+	axs[1,0].plot(hist_t, np.linalg.norm(eta - hist_eta, axis=1))
+	axs[1,0].set_title('Variation error')
+
+	axs[1,2].plot(hist_t, hist_err[:,0])
+	axs[1,2].set_title('Axis 1 error')
+
+	axs[1,3].plot(hist_t, hist_err[:,1])
+	axs[1,3].set_title('Axis 2 error')
 
 	plt.show()
