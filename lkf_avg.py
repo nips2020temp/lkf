@@ -79,18 +79,18 @@ class LKF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(5001)
+	set_seed(9001)
 
 	dt = 0.001
-	n = 50000
+	n = 25000
 	z = Oscillator(dt, 0.0, 1.0)
-	eta = np.random.normal(0.0, 0.01, (2, 2))
+	eta = np.random.normal(0.0, 0.03, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
 	tau_rng = np.linspace(0.1, 0.2, 100)
 	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau_rng)
 
-	max_err = 20
+	max_err = 2
 
 	hist_t = []
 	hist_z = []

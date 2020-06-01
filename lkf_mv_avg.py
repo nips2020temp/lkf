@@ -18,9 +18,13 @@ class LKF(LSProcess):
 		self.R = R
 		self.dt = dt
 		self.tau = tau
+		self.window = 300
+		self.acc = 1
 		self.ndim = x0.shape[0]
 		self.err_hist = []
 		self.eta_t = np.zeros((self.ndim, self.ndim)) # temp var..
+		self.eta_t_hist = [np.zeros((self.ndim, self.ndim))] # temp var..
+		self.eta_t_avg = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.e_zz_t = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.p_inv_t = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.p_t = np.zeros((self.ndim, self.ndim)) # temp var..
@@ -43,14 +47,18 @@ class LKF(LSProcess):
 				d_uu = (((err_t - err_tau)/tau_t)@E_z.T + E_z@((err_t - err_tau)/tau_t).T) / tau_t
 				self.e_zz_t = d_zz
 				# d_P = F_t@P_t + P_t@F_t.T + self.Q - K_t@self.R@K_t.T
-				eta_t = 0.25*H_inv@d_zz@H_inv.T@P_inv / 2
+				eta_t = H_inv@d_zz@H_inv.T@P_inv / 2
 				# eta_t = H_inv@(d_zz - d_uu)@H_inv.T@P_inv / 2
 				# eta_t = H_inv@d_zz@H_inv.T / 2
 				# eta_t = np.clip(eta_t, a_min=-1, a_max=1)
 				self.eta_t = eta_t # TODO fix hack
-			else:
-				eta_t = np.zeros((self.ndim, self.ndim)) # TODO warmup case?
-			F_est = F_t - eta_t
+				self.eta_t_hist.append(eta_t)
+				if self.acc + 1 > self.window:
+					del self.eta_t_hist[0]
+				else:
+					self.acc += 1
+				self.eta_t_avg = sum(self.eta_t_hist) / self.acc
+			F_est = F_t - self.eta_t_avg
 			d_x = F_est@x_t + K_t@(z_t - self.H@x_t)
 			d_P = F_est@P_t + P_t@F_est.T + self.Q - K_t@self.R@K_t.T
 			d_eta = np.zeros((self.ndim, self.ndim)) # H_inv@(err_t@err_t.T - err_tau@err_tau.T)@H_inv.T@P_inv / (2*tau)
@@ -95,14 +103,14 @@ if __name__ == '__main__':
 	set_seed(5001)
 
 	dt = 0.001
-	n = 65000
+	n = 50000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
 	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.25)
 
-	max_err = 4
+	max_err = .3
 
 	hist_t = []
 	hist_z = []
@@ -119,7 +127,7 @@ if __name__ == '__main__':
 		hist_t.append(z.t)
 		hist_x.append(x_t) 
 		hist_err.append(err_t)
-		hist_eta.append(f.eta_t.copy()) # variation
+		hist_eta.append(f.eta_t_avg.copy()) # variation
 		hist_ezz.append(f.e_zz_t.copy())
 		hist_pin.append(f.p_inv_t.copy())
 		hist_p.append(f.p_t.copy())
@@ -171,7 +179,7 @@ if __name__ == '__main__':
 	axs[1,3].plot(hist_t, var_err_rast[:,3])
 	axs[1,3].set_title('Variation error (rasterized)')
 
-	err_avg = pd.Series(index=hist_t, data=var_err_rast[:,3]).ewm(span=500).mean()
+	err_avg = pd.Series(index=hist_t, data=var_err_rast[:,3]).rolling(500).mean()
 	axs[2,0].plot(err_avg.index, err_avg)
 	axs[2,0].set_title('Variation error (rasterized, rolling mean)')
 

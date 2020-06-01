@@ -17,10 +17,12 @@ class KF(LSProcess):
 		self.dt = dt
 		self.ndim = x0.shape[0]
 		rep_ndim = self.ndim*(self.ndim+1) # representational dimension
+		self.p_t = np.zeros((self.ndim, self.ndim)) # temp var..
 
 		def f(t, state, z_t, F_t):
 			state = state.reshape((self.ndim, self.ndim+1))
 			x_t, P_t = state[:, :1], state[:, 1:]
+			self.p_t = P_t
 			z_t = z_t[:, np.newaxis]
 			K_t = P_t@self.H@np.linalg.inv(self.R)
 			d_x = F_t@x_t + K_t@(z_t - self.H@x_t)
@@ -48,19 +50,22 @@ class KF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(1001)
+	set_seed(5001)
 
 	dt = 0.001
-	n = 25000
+	n = 50000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
 	f = KF(z.x0, F_hat, z.H, z.Q, z.R, dt)
+
 	hist_t = []
 	hist_z = []
 	hist_x = []
 	hist_err = []
+	hist_p = []
+
 	for _ in range(n):
 		z_t = z()
 		x_t, err_t = f(z_t)
@@ -68,23 +73,46 @@ if __name__ == '__main__':
 		hist_t.append(z.t)
 		hist_x.append(x_t) 
 		hist_err.append(err_t)
+		hist_p.append(f.p_t.copy())
+
 	hist_t = np.array(hist_t)
 	hist_z = np.array(hist_z)
 	hist_x = np.array(hist_x)
 	hist_err = np.array(hist_err)
-	fig, axs = plt.subplots(1, 5, figsize=(20, 5))
+	hist_p = np.array(hist_p)
+
+	fig, axs = plt.subplots(2, 5, figsize=(20, 10))
 	fig.suptitle('KF')
-	axs[0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
-	axs[0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
-	axs[0].legend()
-	axs[0].set_title('System')
-	axs[1].plot(hist_t, hist_z[:,0], color='blue', label='obs')
-	axs[1].plot(hist_t, hist_x[:,0], color='orange', label='est')
-	axs[2].plot(hist_t, hist_z[:,1], color='blue', label='obs')
-	axs[2].plot(hist_t, hist_x[:,1], color='orange', label='est')
-	axs[3].plot(hist_t, hist_err[:,0])
-	axs[3].set_title('Axis 1 error')
-	axs[4].plot(hist_t, hist_err[:,1])
-	axs[4].set_title('Axis 2 error')
+
+	axs[0,0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
+	axs[0,0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
+	axs[0,0].legend()
+	axs[0,0].set_title('System')
+	axs[0,1].plot(hist_t, hist_z[:,0], color='blue', label='obs')
+	axs[0,1].plot(hist_t, hist_x[:,0], color='orange', label='est')
+	axs[0,2].plot(hist_t, hist_z[:,1], color='blue', label='obs')
+	axs[0,2].plot(hist_t, hist_x[:,1], color='orange', label='est')
+	axs[0,3].plot(hist_t, hist_err[:,0])
+	axs[0,3].set_title('Axis 1 error')
+	axs[0,4].plot(hist_t, hist_err[:,1])
+	axs[0,4].set_title('Axis 2 error')
+
+	p_rast = hist_p.reshape((hist_p.shape[0], 4))
+	axs[1,0].plot(hist_t, p_rast[:,0])
+	axs[1,0].plot(hist_t, p_rast[:,1])
+	axs[1,0].plot(hist_t, p_rast[:,2])
+	axs[1,0].plot(hist_t, p_rast[:,3])
+	axs[1,0].set_title('P (rasterized)')
+
+	hist_pin = np.zeros_like(hist_p)
+	for i in range(hist_p.shape[0]):
+		hist_pin[i] = np.linalg.inv(hist_p[i])
+	p_inv_rast = hist_pin.reshape((hist_pin.shape[0], 4))
+	axs[1,1].plot(hist_t, p_inv_rast[:,0])
+	axs[1,1].plot(hist_t, p_inv_rast[:,1])
+	axs[1,1].plot(hist_t, p_inv_rast[:,2])
+	axs[1,1].plot(hist_t, p_inv_rast[:,3])
+	axs[1,1].set_title('P_inv (rasterized)')
+
 	plt.show()
 
