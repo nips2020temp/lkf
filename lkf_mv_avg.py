@@ -51,7 +51,7 @@ class LKF(LSProcess):
 				# eta_t = H_inv@(d_zz - d_uu)@H_inv.T@P_inv / 2
 				# eta_t = H_inv@d_zz@H_inv.T / 2
 				# eta_t = np.clip(eta_t, a_min=-1, a_max=1)
-				self.eta_t = eta_t # TODO fix hack
+				self.eta_t = 0.25 * eta_t # TODO fix hack
 				self.eta_t_hist.append(eta_t)
 				if self.acc + 1 > self.window:
 					del self.eta_t_hist[0]
@@ -103,7 +103,7 @@ if __name__ == '__main__':
 	set_seed(5001)
 
 	dt = 0.001
-	n = 50000
+	n = 100000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta

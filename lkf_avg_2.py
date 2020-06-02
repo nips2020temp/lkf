@@ -11,13 +11,13 @@ import pdb
 import pandas as pd
 
 class LKF(LSProcess):
-	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau_rng: list):
+	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau=float('inf')):
 		self.F = F
 		self.H = H
 		self.Q = Q
 		self.R = R
 		self.dt = dt
-		self.tau_rng = tau_rng
+		self.tau = tau
 		self.ndim = x0.shape[0]
 		self.err_hist = []
 		self.eta_t = np.zeros((self.ndim, self.ndim)) # temp var..
@@ -25,22 +25,26 @@ class LKF(LSProcess):
 		self.p_inv_t = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.p_t = np.zeros((self.ndim, self.ndim)) # temp var..
 
+		self.n_est = 100
+
 		def f(t, state, z_t, err_hist, F_t):
 			state = state.reshape(self.ode_shape)
 			x_t, P_t, eta_t = state[:, :1], state[:, 1:3], state[:, 3:]
 			self.p_t = P_t
 			z_t = z_t[:, np.newaxis]
 			eta_t = np.zeros((self.ndim, self.ndim))
-			if t > self.tau_rng[-1]: # TODO: warmup case?
+			if self.history_loaded(): # TODO: warmup case?
 				H_inv = np.linalg.inv(self.H)
 				P_inv = np.linalg.inv(P_t)
 				self.p_inv_t = P_inv
-				for tau in self.tau_rng:
-					tau_n = min(int(tau / self.dt), len(err_hist))
-					err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[-tau_n][:,np.newaxis]
-					E_zz = (err_t@err_t.T - err_tau@err_tau.T) / tau
-					eta_t += H_inv@E_zz@H_inv.T@P_inv / 2
-				eta_t /= len(self.tau_rng)
+				tau_n = int(self.tau / self.dt)
+				d_zz = np.zeros((self.ndim, self.ndim))
+				for i in range(self.n_est):
+					err_t, err_tau = err_hist[-1-i][:,np.newaxis], err_hist[-tau_n-i][:,np.newaxis]
+					d_zz += (err_t@err_t.T - err_tau@err_tau.T) / self.tau
+				d_zz /= self.n_est
+				self.e_zz_t = d_zz
+				eta_t = H_inv@d_zz@H_inv.T@P_inv / 2
 				# eta_t = np.clip(eta_t, a_min=-1, a_max=1)
 				self.eta_t = eta_t # TODO fix hack
 			F_est = F_t - eta_t
@@ -71,9 +75,12 @@ class LKF(LSProcess):
 		x_t = np.squeeze(self.r.y.reshape(self.ode_shape)[:, :1])
 		err_t = z_t - x_t@self.H.T
 		self.err_hist.append(err_t)
-		if self.t > self.tau_rng[-1]:
+		if self.history_loaded():
 			self.err_hist = self.err_hist[1:]
 		return x_t.copy(), err_t # x_t variable gets reused somewhere...
+
+	def history_loaded(self):
+		return self.t > self.tau + self.n_est * self.dt
 
 	@property
 	def ode_shape(self):
@@ -83,10 +90,11 @@ class LKF(LSProcess):
 	def ode_ndim(self):
 		return self.ode_shape[0] * self.ode_shape[1] # for raveled representation
 
+
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(5001)
+	set_seed(9001)
 
 	dt = 0.001
 	n = 100000
@@ -94,10 +102,10 @@ if __name__ == '__main__':
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
-	tau_rng = np.linspace(0.1, 0.2, 100)
-	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau_rng)
+	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.25)
 
 	max_err = .3
+	max_eta_err = 20.
 
 	hist_t = []
 	hist_z = []
@@ -118,8 +126,15 @@ if __name__ == '__main__':
 		hist_ezz.append(f.e_zz_t.copy())
 		hist_pin.append(f.p_inv_t.copy())
 		hist_p.append(f.p_t.copy())
+		
+		# Error condition 1
 		if np.linalg.norm(err_t) > max_err:
 			print('Error overflowed!')
+			break
+
+		# Error condition 2
+		if np.linalg.norm(eta - f.eta_t) > max_eta_err:
+			print('Variation error overflowed!')
 			break
 
 	start, end = None, None # for case analysis
@@ -136,7 +151,7 @@ if __name__ == '__main__':
 	# pdb.set_trace()
 
 	fig, axs = plt.subplots(3, 4, figsize=(20, 20))
-	fig.suptitle('LKF AVG')
+	fig.suptitle('LKF AVG 2')
 	
 	axs[0,0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
 	axs[0,0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')

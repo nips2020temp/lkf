@@ -9,7 +9,7 @@ import scipy.integrate as scint
 
 class LSProcess:
 	''' Linear stochastic hidden proocess ''' 
-	def __init__(self, x0: np.ndarray, F: callable, H: np.ndarray, dt: float, var_w: float, var_v: float):
+	def __init__(self, x0: np.ndarray, F: callable, H: np.ndarray, dt: float, var_w: float, var_v: float, w_bnd: tuple = (-float('inf'), float('inf')), v_bnd: tuple = (-float('inf'), float('inf'))):
 		assert x0.shape[0] == H.shape[0] == F(0).shape[0]
 		self.ndim = x0.shape[0]
 		self.x0 = x0
@@ -18,6 +18,7 @@ class LSProcess:
 		self.dt = dt
 		self.Q = np.eye(x0.shape[0]) * var_w
 		self.R = np.eye(x0.shape[0]) * var_v
+		self.w_bnd, self.v_bnd = w_bnd, v_bnd
 
 		def f(t, x_t, F_t):
 			return x_t@F_t.T
@@ -25,6 +26,7 @@ class LSProcess:
 		def g(t, x_t):
 			return self.Q
 
+		# TODO use w_bnd
 		self.r = Integrator(f, g, self.ndim)
 		self.r.set_initial_value(x0, 0.)
 
@@ -34,7 +36,7 @@ class LSProcess:
 		self.r.integrate(self.t + self.dt)
 		x_t = self.r.y
 		v_t = self.R @ np.random.normal(0.0, np.sqrt(self.dt), self.ndim)
-		z_t = self.H@x_t + v_t
+		z_t = self.H@x_t + np.clip(v_t, self.v_bnd[0], self.v_bnd[1])
 		return z_t 
 
 	@property
@@ -42,21 +44,25 @@ class LSProcess:
 		return self.r.t
 
 
-class Oscillator(LSProcess):
+class BoundedLSProcess(LSProcess):
+	def __init__(self, x0: np.ndarray, F: callable, H: np.ndarray, dt: float, var_w: float, var_v: float):
+		super().__init__(x0, F, H, dt, var_w, var_v, w_bnd=(-3*np.sqrt(var_w), 3*np.sqrt(var_w)), v_bnd=(-3*np.sqrt(var_v), 3*np.sqrt(var_v)))
+
+class Oscillator(BoundedLSProcess):
 	def __init__(self, dt: float, var_w: float, var_v: float):
 		F = lambda t: np.array([[-1.05,-3.60],[1.10, 1.05]])
 		H = np.eye(2)
 		x0 = np.array([-1., -1.])
 		super().__init__(x0, F, H, dt, var_w, var_v)
 
-class SpiralSink(LSProcess):
+class SpiralSink(BoundedLSProcess):
 	def __init__(self, dt: float, var_w: float, var_v: float):
 		F = lambda t: np.array([[-1.,1.],[-1.25, -0.45]])
 		H = np.eye(2)
 		x0 = np.array([[-1.], [-1.]])
 		super().__init__(x0, F, H, dt, var_w, var_v)
 
-class Saddle(LSProcess):
+class Saddle(BoundedLSProcess):
 	def __init__(self, dt: float, var_w: float, var_v: float):
 		F = lambda t: np.array([[-1.,1.],[-1.25, -0.45]])
 		H = np.eye(2)
