@@ -50,10 +50,10 @@ class KF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(8002)
+	set_seed(2001)
 
 	dt = 0.001
-	n = 100000
+	n = 40000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta

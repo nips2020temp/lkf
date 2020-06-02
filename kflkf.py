@@ -4,6 +4,7 @@
 from systems import *
 from integrator import Integrator
 from utils import set_seed
+from kf import KF
 
 from typing import Callable
 import numpy as np
@@ -28,7 +29,11 @@ class LKF(LSProcess):
 		self.p_inv_t = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.p_t = np.zeros((self.ndim, self.ndim)) # temp var..
 
-		eps = 5e-2
+		eta_F = lambda _: np.zeros((4,4))
+		eta_H = np.eye(4)
+		eta_Q = np.zeros((4,4))
+		eta_R = np.eye(4) * 0.1
+		self.eta_filter = KF(self.eta_t.ravel(), eta_F, eta_H, eta_Q, eta_R, self.dt)
 
 		def f(t, state, z_t, err_hist, F_t):
 			# TODO fix all stateful references in this body
@@ -41,7 +46,7 @@ class LKF(LSProcess):
 			eta_t = np.zeros((self.ndim, self.ndim)) # TODO warmup case?
 			if t > self.tau: 
 				H_inv = np.linalg.inv(self.H)
-				P_inv = np.linalg.inv(P_t + eps * np.eye(2)) 
+				P_inv = np.linalg.inv(P_t)
 				self.p_inv_t = P_inv
 				err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[0][:,np.newaxis]
 				d_zz = (err_t@err_t.T - err_tau@err_tau.T) / self.tau
@@ -93,11 +98,14 @@ class LKF(LSProcess):
 		# # pdb.set_trace()
 		# if stats.uniform.rvs() <= alpha:
 		# 	self.eta_t = eta_new
-		self.eta_t = eta_new
+
+		""" Kalman-filtered parameter estimation """
+		eta_new, _ = self.eta_filter(eta_new.ravel())
+		self.eta_t = eta_new.reshape((2,2))
 
 	def f_eta(self, eta: np.ndarray):
 		""" density function of variations """
-		return stats.multivariate_normal.pdf(eta.ravel(), mean=self.eta_mu.ravel(), cov=self.eta_var.ravel())
+		return stats.multivariate_normal.pdf(eta.ravel(), mean=self.eta_mu.ravel(), cov=10*self.eta_var.ravel())
 
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
@@ -105,7 +113,7 @@ if __name__ == '__main__':
 	set_seed(2001)
 
 	dt = 0.001
-	n = 150000
+	n = 200000
 	z = Oscillator(dt, 0.0, 1.0)
 	# z = SpiralSink(dt, 0.0, 1.0)
 	eta_mu, eta_var = 0., 0.01
@@ -114,7 +122,7 @@ if __name__ == '__main__':
 	print(F_hat(0))
 	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.25, eta_mu=eta_mu*np.ones((2,2)), eta_var=eta_var*np.ones((2,2)))
 
-	max_err = 1
+	max_err = 10
 	max_eta_err = float('inf') 
 
 	hist_t = []
@@ -161,7 +169,7 @@ if __name__ == '__main__':
 	# pdb.set_trace()
 
 	fig, axs = plt.subplots(3, 4, figsize=(20, 20))
-	fig.suptitle('LKF')
+	fig.suptitle('KF-LKF')
 	
 	axs[0,0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
 	axs[0,0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')

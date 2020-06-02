@@ -25,7 +25,7 @@ class LKF(LSProcess):
 		self.p_inv_t = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.p_t = np.zeros((self.ndim, self.ndim)) # temp var..
 
-		self.n_est = 100
+		self.n_est = 20
 
 		def f(t, state, z_t, err_hist, F_t):
 			state = state.reshape(self.ode_shape)
@@ -45,7 +45,7 @@ class LKF(LSProcess):
 				d_zz /= self.n_est
 				self.e_zz_t = d_zz
 				eta_t = H_inv@d_zz@H_inv.T@P_inv / 2
-				# eta_t = np.clip(eta_t, a_min=-1, a_max=1)
+				eta_t = np.clip(eta_t, -10, 10)
 				self.eta_t = eta_t # TODO fix hack
 			F_est = F_t - eta_t
 			K_t = P_t@self.H@np.linalg.inv(self.R)
@@ -94,18 +94,18 @@ class LKF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(9001)
+	set_seed(4001)
 
 	dt = 0.001
-	n = 100000
+	n = 30000
 	z = Oscillator(dt, 0.0, 1.0)
 	eta = np.random.normal(0.0, 0.01, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
 	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.25)
 
-	max_err = .3
-	max_eta_err = 20.
+	max_err = 10
+	max_eta_err = float('inf')
 
 	hist_t = []
 	hist_z = []
