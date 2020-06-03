@@ -1,7 +1,7 @@
 ''' Discretization of Kalman-Bucy filter
 '''
 
-from systems import Oscillator, LSProcess
+from systems import *
 from integrator import Integrator
 from utils import set_seed
 
@@ -57,15 +57,20 @@ class KF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(3001)
+	set_seed(6008)
 
 	dt = 0.001
-	n = 200000
-	z = Oscillator(dt, 0.0, 1.0)
+	n = 60000
+	# z = Oscillator(dt, 0.0, 1.0) 
 	# z = SpiralSink(dt, 0.0, 1.0)
-	eta_mu, eta_var = 0., 0.05
-	eta = np.random.normal(eta_mu, eta_var, (2, 2))
-	F_hat = lambda t: z.F(t) + eta
+	# eta_mu, eta_var = 0., 0.0
+	# eta = np.random.normal(eta_mu, eta_var, (2, 2))
+	# F_hat = lambda t: z.F(t) + eta
+
+	z = TimeVarying(dt, 0.0, 1.0, f=1/20)
+	F_hat = lambda t: z.F(0)
+	eta = lambda t: F_hat(t) - z.F(t)
+
 	print(F_hat(0))
 	f = KF(z.x0, F_hat, z.H, z.Q, z.R, dt)
 
@@ -84,11 +89,14 @@ if __name__ == '__main__':
 		hist_err.append(err_t)
 		hist_p.append(f.P_t.copy())
 
-	hist_t = np.array(hist_t)
-	hist_z = np.array(hist_z)
-	hist_x = np.array(hist_x)
-	hist_err = np.array(hist_err)
-	hist_p = np.array(hist_p)
+	start, end = None, 60000 # for case analysis
+	# start, end = None, None # for case analysis
+
+	hist_t = np.array(hist_t)[start:end]
+	hist_z = np.array(hist_z)[start:end]
+	hist_x = np.array(hist_x)[start:end]
+	hist_err = np.array(hist_err)[start:end]
+	hist_p = np.array(hist_p)[start:end]
 
 	fig, axs = plt.subplots(2, 5, figsize=(20, 10))
 	fig.suptitle('KF')

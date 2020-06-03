@@ -36,9 +36,9 @@ class LKF(LSProcess):
 			x_t, P_t, eta_t = self.load_vars(state)
 			z_t = z_t[:, np.newaxis]
 			K_t = P_t@self.H@np.linalg.inv(self.R)
-			# eta_t = np.zeros((self.ndim, self.ndim)) # TODO warmup case?
 
-			if t > self.tau: 
+			d_eta = np.zeros((self.ndim, self.ndim)) 
+			if t > self.tau: # TODO warmup case?
 				H_inv = np.linalg.inv(self.H)
 				P_kf_t = self.kf.P_t
 				P_inv = np.linalg.solve(P_kf_t.T@P_kf_t + self.eps*np.eye(self.ndim), P_kf_t.T)
@@ -47,19 +47,19 @@ class LKF(LSProcess):
 				tau_n = int(self.tau / self.dt)
 				err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[-tau_n][:,np.newaxis]
 				d_zz = (err_t@err_t.T - err_tau@err_tau.T) / self.tau
-				E_z = sum(err_hist[-tau_n:])[:,np.newaxis] / tau_n
-				d_uu = ((err_t - err_tau)/self.tau)@(E_z.T) + E_z@(((err_t - err_tau)/self.tau).T)
-				self.e_zz_t = d_zz - d_uu
+				self.e_zz_t = d_zz 
+				# E_z = sum(err_hist[-tau_n:])[:,np.newaxis] / tau_n
+				# d_uu = ((err_t - err_tau)/self.tau)@(E_z.T) + E_z@(((err_t - err_tau)/self.tau).T)
+				# self.e_zz_t = d_zz - d_uu
 
 				# if np.linalg.norm(d_zz) >= 1.0:
 				# 	d_zz = np.zeros((self.ndim, self.ndim))
 
-				eta_t = H_inv@d_zz@H_inv.T@P_inv / 2
+				d_eta = (H_inv@d_zz@H_inv.T@P_inv / 2 - eta_t) / self.tau
 
 			F_est = F_t - eta_t
 			d_x = F_est@x_t + K_t@(z_t - self.H@x_t)
 			d_P = F_est@P_t + P_t@F_est.T + self.Q - K_t@self.R@K_t.T
-			d_eta = np.zeros((self.ndim, self.ndim)) 
 			d_state = np.concatenate((d_x, d_P, d_eta), axis=1)
 			return d_state.ravel() # Flatten for integrator
 
@@ -118,19 +118,20 @@ if __name__ == '__main__':
 	n = 200000
 	z = Oscillator(dt, 0.0, 1.0)
 	# z = SpiralSink(dt, 0.0, 1.0)
-	eta_mu, eta_var = 0., 0.05
+	eta_mu, eta_var = 0., 0.03
 	eta = np.random.normal(eta_mu, eta_var, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
-	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.01)
+	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.25)
 
 	max_err = 5.
 	max_eta_err = float('inf')
-	max_zz = 2. 
+	max_zz = 100. 
 
 	hist_t = []
 	hist_z = []
 	hist_x = []
+	hist_kf_x = []
 	hist_err = []
 	hist_eta = []
 	hist_ezz = []
@@ -142,6 +143,7 @@ if __name__ == '__main__':
 		hist_z.append(z_t)
 		hist_t.append(z.t)
 		hist_x.append(x_t) 
+		hist_kf_x.append(f.kf.x_t.copy())
 		hist_err.append(err_t)
 		hist_eta.append(f.eta_t.copy()) # variation
 		hist_ezz.append(f.e_zz_t.copy())
@@ -169,6 +171,7 @@ if __name__ == '__main__':
 	hist_t = np.array(hist_t)[start:end]
 	hist_z = np.array(hist_z)[start:end]
 	hist_x = np.array(hist_x)[start:end]
+	hist_kf_x = np.array(hist_kf_x)[start:end]
 	hist_err = np.array(hist_err)[start:end]
 	hist_eta = np.array(hist_eta)[start:end]
 	hist_ezz = np.array(hist_ezz)[start:end]
@@ -179,7 +182,7 @@ if __name__ == '__main__':
 	# pdb.set_trace()
 
 	fig, axs = plt.subplots(3, 4, figsize=(20, 20))
-	fig.suptitle('LKF')
+	fig.suptitle('LKF2')
 	
 	axs[0,0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
 	axs[0,0].plot(hist_x[:,0], hist_x[:,1], color='orange', label='est')
@@ -227,6 +230,11 @@ if __name__ == '__main__':
 	axs[1,0].plot(hist_t, p_rast[:,2])
 	axs[1,0].plot(hist_t, p_rast[:,3])
 	axs[1,0].set_title('P (rasterized)')
+
+	axs[2,0].plot(hist_z[:,0], hist_z[:,1], color='blue', label='obs')
+	axs[2,0].plot(hist_kf_x[:,0], hist_kf_x[:,1], color='orange', label='est')
+	axs[2,0].legend()
+	axs[2,0].set_title('System (KF)')
 
 	axs[2,1].plot(hist_t, hist_kf_err[:,0])
 	axs[2,1].set_title('Axis 1 error (KF)')

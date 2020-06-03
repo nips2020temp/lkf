@@ -21,14 +21,12 @@ class LKF(LSProcess):
 		self.tau = tau
 		self.eps = eps
 		self.eta_mu = eta_mu
-		self.eta_var = eta_var
+		self.eta_var = max(eta_var, 1e-3) # to avoid singular matrix
 		self.ndim = x0.shape[0]
 
 		self.err_hist = []
-		self.eta_t = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.e_zz_t = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.p_inv_t = np.zeros((self.ndim, self.ndim)) # temp var..
-		self.p_t = np.zeros((self.ndim, self.ndim)) # temp var..
 
 		def f(t, state, z_t, err_hist, F_t):
 			# TODO fix all stateful references in this body
@@ -56,7 +54,12 @@ class LKF(LSProcess):
 				# d_uu = ((err_t - err_tau)/self.tau)@(E_z.T) + E_z@(((err_t - err_tau)/self.tau).T)
 				# self.e_zz_t = d_zz - d_uu
 
-				d_eta = (H_inv@d_zz@H_inv.T@P_inv / 2 - eta_t) / self.dt
+				d_eta_new = H_inv@d_zz@H_inv.T@P_inv / 2 - eta_t
+				d_eta = d_eta_new / self.t
+
+				# alpha = self.f_eta(d_eta_new) / self.f_eta(np.zeros((2,2)))
+				# if stats.uniform.rvs() <= alpha:
+				# 	d_eta = d_eta_new / self.dt
 
 			F_est = F_t - eta_t
 			d_x = F_est@x_t + K_t@(z_t - self.H@x_t)
@@ -107,26 +110,35 @@ class LKF(LSProcess):
 
 	def f_eta(self, eta: np.ndarray):
 		""" density function of variations """
-		return stats.multivariate_normal.pdf(eta.ravel(), mean=self.eta_mu.ravel(), cov=self.eta_var.ravel())
+		return stats.multivariate_normal.pdf(eta.ravel(), mean=self.eta_mu*np.ones(4), cov=self.eta_var*np.ones(4))
 
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(3001)
+	set_seed(4001)
 
 	dt = 0.001
-	n = 100000
-	z = Oscillator(dt, 0.0, 1.0)
+	n = 60000
+
+	""" Noisy LTI example """ 
+	# z = Oscillator(dt, 0.0, 1.0)
 	# z = SpiralSink(dt, 0.0, 1.0)
-	eta_mu, eta_var = 0., 0.01
-	eta = np.random.normal(eta_mu, eta_var, (2, 2))
-	F_hat = lambda t: z.F(t) + eta
+	eta_mu, eta_var = 0., 0.1
+	# eta0 = np.random.normal(eta_mu, eta_var, (2, 2))
+	# eta = lambda t: eta0
+	# F_hat = lambda t: z.F(t) + eta(t)
+
+	""" Partially known LTV example """ 
+	z = TimeVarying(dt, 0.0, 1.0, f=1/20)
+	F_hat = lambda t: z.F(0)
+	eta = lambda t: F_hat(t) - z.F(t)
+
 	print(F_hat(0))
-	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.25, eta_mu=eta_mu*np.zeros((2,2)), eta_var=eta_var*np.ones((2,2)))
+	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.1, eta_mu=eta_mu, eta_var=eta_var, eps=1e-2)
 
 	max_err = 10.
 	max_eta_err = 40
-	max_zz = 4. 
+	max_zz = 40. 
 
 	hist_t = []
 	hist_z = []
@@ -154,7 +166,7 @@ if __name__ == '__main__':
 			break
 
 		# Error condition 2
-		if np.linalg.norm(eta - f.eta_t) > max_eta_err:
+		if np.linalg.norm(f.eta_t - eta(z.t)) > max_eta_err:
 			print('Variation error overflowed!')
 			break
 
@@ -163,7 +175,7 @@ if __name__ == '__main__':
 			print('d_zz overflowed!')
 			break
 
-	# start, end = -2000, -10 # for case analysis
+	# start, end = -1000, None # for case analysis
 	start, end = None, None # for case analysis
 
 	hist_t = np.array(hist_t)[start:end]
@@ -193,8 +205,8 @@ if __name__ == '__main__':
 	axs[0,2].plot(hist_t, hist_x[:,1], color='orange', label='est')
 	axs[0,2].set_title('Axis 2')
 
-	var_err = eta - hist_eta
-	axs[1,0].plot(hist_t, np.linalg.norm(var_err, axis=1))
+	var_err = hist_eta - np.array(list(map(eta, hist_t)))
+	axs[1,0].plot(hist_t, np.linalg.norm(var_err, axis=(1,2)))
 	axs[1,0].set_title('Variation error (norm)')
 
 	axs[1,1].plot(hist_t, hist_err[:,0])

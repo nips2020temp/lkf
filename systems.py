@@ -57,9 +57,32 @@ class Oscillator(BoundedLSProcess):
 
 class SpiralSink(BoundedLSProcess):
 	def __init__(self, dt: float, var_w: float, var_v: float):
-		F = lambda t: np.array([[-1.,1.],[-1.25, -0.45]])
+		F = lambda t: np.array([[-1.15864464, -3.68960651], [1.06937006,  0.91600663]])
 		H = np.eye(2)
-		x0 = np.array([[-1.], [-1.]])
+		x0 = np.array([-1., -1.])
+		super().__init__(x0, F, H, dt, var_w, var_v)
+
+class SpiralSource(BoundedLSProcess):
+	def __init__(self, dt: float, var_w: float, var_v: float):
+		F = lambda t: np.array([[-0.98092249, -3.67973989], [1.06922538,  1.20720164]])
+		H = np.eye(2)
+		x0 = np.array([-1., -1.])
+		super().__init__(x0, F, H, dt, var_w, var_v)
+
+class TimeVarying(BoundedLSProcess):
+	""" Smooth interpolation between spiral sink, center, spiral source systems """ 
+	def __init__(self, dt: float, var_w: float, var_v: float, f=1/5):
+		F0 = np.array([[-1.05,-3.60],[1.10, 1.05]])
+		F1 = np.array([[-1.15864464, -3.68960651], [1.06937006,  0.91600663]])
+		F2 = np.array([[-0.98092249, -3.67973989], [1.06922538,  1.20720164]])
+		def F(t: float):
+			a = np.sin(2*np.pi*f*t)
+			if a >= 0:
+				return (1 - a)*F0 + a*F1
+			else:
+				return (1 + a)*F0 - a*F2
+		H = np.eye(2)
+		x0 = np.array([-1., -1.])
 		super().__init__(x0, F, H, dt, var_w, var_v)
 
 class Saddle(BoundedLSProcess):
