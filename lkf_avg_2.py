@@ -11,13 +11,14 @@ import pdb
 import pandas as pd
 
 class LKF(LSProcess):
-	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau=float('inf')):
+	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau=float('inf'), eps=1e-3):
 		self.F = F
 		self.H = H
 		self.Q = Q
 		self.R = R
 		self.dt = dt
 		self.tau = tau
+		self.eps = eps
 		self.ndim = x0.shape[0]
 		self.err_hist = []
 		self.eta_t = np.zeros((self.ndim, self.ndim)) # temp var..
@@ -35,7 +36,7 @@ class LKF(LSProcess):
 			eta_t = np.zeros((self.ndim, self.ndim))
 			if self.history_loaded(): # TODO: warmup case?
 				H_inv = np.linalg.inv(self.H)
-				P_inv = np.linalg.inv(P_t)
+				P_inv = np.linalg.solve(P_t.T@P_t + eps*np.eye(2), P_t.T)
 				self.p_inv_t = P_inv
 				tau_n = int(self.tau / self.dt)
 				d_zz = np.zeros((self.ndim, self.ndim))
@@ -45,7 +46,7 @@ class LKF(LSProcess):
 				d_zz /= self.n_est
 				self.e_zz_t = d_zz
 				eta_t = H_inv@d_zz@H_inv.T@P_inv / 2
-				eta_t = np.clip(eta_t, -10, 10)
+				# eta_t = np.clip(eta_t, -10, 10)
 				self.eta_t = eta_t # TODO fix hack
 			F_est = F_t - eta_t
 			K_t = P_t@self.H@np.linalg.inv(self.R)
@@ -94,12 +95,12 @@ class LKF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(4001)
+	set_seed(3001)
 
 	dt = 0.001
-	n = 30000
+	n = 200000
 	z = Oscillator(dt, 0.0, 1.0)
-	eta = np.random.normal(0.0, 0.01, (2, 2))
+	eta = np.random.normal(0.0, 0.05, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
 	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.25)

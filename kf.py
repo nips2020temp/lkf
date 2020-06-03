@@ -17,12 +17,9 @@ class KF(LSProcess):
 		self.dt = dt
 		self.ndim = x0.shape[0]
 		rep_ndim = self.ndim*(self.ndim+1) # representational dimension
-		self.p_t = np.zeros((self.ndim, self.ndim)) # temp var..
 
 		def f(t, state, z_t, F_t):
-			state = state.reshape((self.ndim, self.ndim+1))
-			x_t, P_t = state[:, :1], state[:, 1:]
-			self.p_t = P_t
+			x_t, P_t = self.load_vars(state)
 			z_t = z_t[:, np.newaxis]
 			K_t = P_t@self.H@np.linalg.inv(self.R)
 			d_x = F_t@x_t + K_t@(z_t - self.H@x_t)
@@ -35,27 +32,39 @@ class KF(LSProcess):
 
 		x0 = x0[:, np.newaxis]
 		P0 = np.eye(self.ndim)
+		self.x_t = x0
+		self.P_t = P0
+
 		iv = np.concatenate((x0, P0), axis=1).ravel() # Flatten for integrate.ode
 		self.r = Integrator(f, g, rep_ndim)
 		self.r.set_initial_value(iv, 0.)
+
+	def load_vars(self, state: np.ndarray):
+		state = state.reshape((self.ndim, self.ndim+1))
+		x_t, P_t = state[:, :1], state[:, 1:]
+		return x_t, P_t
 
 	def __call__(self, z_t: np.ndarray):
 		''' Observe through filter ''' 
 		self.r.set_f_params(z_t, self.F(self.t))
 		self.r.integrate(self.t + self.dt)
-		x_t = np.squeeze(self.r.y.reshape((self.ndim, self.ndim+1))[:, :1])
+		x_t, P_t = self.load_vars(self.r.y)
+		self.x_t, self.P_t = x_t, P_t
+		x_t = np.squeeze(x_t)
 		err_t = z_t - x_t@self.H.T
 		return x_t.copy(), err_t # x_t variable gets reused somewhere...
 
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(2001)
+	set_seed(3001)
 
 	dt = 0.001
-	n = 40000
+	n = 200000
 	z = Oscillator(dt, 0.0, 1.0)
-	eta = np.random.normal(0.0, 0.01, (2, 2))
+	# z = SpiralSink(dt, 0.0, 1.0)
+	eta_mu, eta_var = 0., 0.05
+	eta = np.random.normal(eta_mu, eta_var, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
 	f = KF(z.x0, F_hat, z.H, z.Q, z.R, dt)
@@ -73,7 +82,7 @@ if __name__ == '__main__':
 		hist_t.append(z.t)
 		hist_x.append(x_t) 
 		hist_err.append(err_t)
-		hist_p.append(f.p_t.copy())
+		hist_p.append(f.P_t.copy())
 
 	hist_t = np.array(hist_t)
 	hist_z = np.array(hist_z)

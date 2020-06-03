@@ -11,13 +11,14 @@ import pdb
 import pandas as pd
 
 class LKF(LSProcess):
-	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau_rng: list):
+	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau_rng: list, eps=1e-3):
 		self.F = F
 		self.H = H
 		self.Q = Q
 		self.R = R
 		self.dt = dt
 		self.tau_rng = tau_rng
+		self.eps = eps
 		self.ndim = x0.shape[0]
 		self.err_hist = []
 		self.eta_t = np.zeros((self.ndim, self.ndim)) # temp var..
@@ -33,7 +34,7 @@ class LKF(LSProcess):
 			eta_t = np.zeros((self.ndim, self.ndim))
 			if t > self.tau_rng[-1]: # TODO: warmup case?
 				H_inv = np.linalg.inv(self.H)
-				P_inv = np.linalg.inv(P_t)
+				P_inv = np.linalg.solve(P_t.T@P_t + self.eps*np.eye(self.ndim), P_t.T)
 				self.p_inv_t = P_inv
 				for tau in self.tau_rng:
 					tau_n = min(int(tau / self.dt), len(err_hist))
@@ -86,18 +87,18 @@ class LKF(LSProcess):
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
-	set_seed(5001)
+	set_seed(3001)
 
 	dt = 0.001
-	n = 100000
+	n = 200000
 	z = Oscillator(dt, 0.0, 1.0)
-	eta = np.random.normal(0.0, 0.01, (2, 2))
+	eta = np.random.normal(0.0, 0.5, (2, 2))
 	F_hat = lambda t: z.F(t) + eta
 	print(F_hat(0))
-	tau_rng = np.linspace(0.1, 0.2, 100)
+	tau_rng = np.linspace(0.2, 0.3, 100)
 	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau_rng)
 
-	max_err = .3
+	max_err = 2
 
 	hist_t = []
 	hist_z = []
