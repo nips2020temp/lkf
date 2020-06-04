@@ -60,7 +60,7 @@ if __name__ == '__main__':
 	set_seed(6008)
 
 	dt = 0.001
-	n = 60000
+	n = 20000
 	# z = Oscillator(dt, 0.0, 1.0) 
 	# z = SpiralSink(dt, 0.0, 1.0)
 	# eta_mu, eta_var = 0., 0.0
@@ -89,7 +89,7 @@ if __name__ == '__main__':
 		hist_err.append(err_t)
 		hist_p.append(f.P_t.copy())
 
-	start, end = None, 60000 # for case analysis
+	start, end = None, 20000 # for case analysis
 	# start, end = None, None # for case analysis
 
 	hist_t = np.array(hist_t)[start:end]

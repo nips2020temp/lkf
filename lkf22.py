@@ -4,6 +4,7 @@
 from systems import *
 from integrator import Integrator
 from utils import set_seed
+from kf import KF
 
 from typing import Callable
 import numpy as np
@@ -12,7 +13,7 @@ import pdb
 import scipy.stats as stats
 
 class LKF(LSProcess):
-	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau: float = float('inf'), eta_bnd: float = float('inf'), eps=1e-4):
+	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau: float = float('inf'), eta_mu: float = 0., eta_var: float = 1., eps=1e-4):
 		self.F = F
 		self.H = H
 		self.Q = Q
@@ -20,10 +21,12 @@ class LKF(LSProcess):
 		self.dt = dt
 		self.tau = tau
 		self.eps = eps
-		self.eta_bnd = eta_bnd
+		self.eta_mu = eta_mu
+		self.eta_var = max(eta_var, 1e-3) # to avoid singular matrix
 		self.ndim = x0.shape[0]
 
-		self.err_hist = []
+		self.kf_err_hist = []
+		self.kf = KF(x0, F, H, Q, R, dt)
 		self.e_zz_t = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.p_inv_t = np.zeros((self.ndim, self.ndim)) # temp var..
 
@@ -38,7 +41,8 @@ class LKF(LSProcess):
 			d_eta = np.zeros((self.ndim, self.ndim)) 
 			if t > self.tau: # TODO warmup case?
 				H_inv = np.linalg.inv(self.H)
-				P_inv = np.linalg.solve(P_t.T@P_t + self.eps*np.eye(self.ndim), P_t.T)
+				P_kf_t = self.kf.P_t
+				P_inv = np.linalg.solve(P_kf_t.T@P_kf_t + self.eps*np.eye(self.ndim), P_kf_t.T)
 				self.p_inv_t = P_inv
 
 				tau_n = int(self.tau / self.dt)
@@ -53,9 +57,11 @@ class LKF(LSProcess):
 				# d_uu = ((err_t - err_tau)/self.tau)@(E_z.T) + E_z@(((err_t - err_tau)/self.tau).T)
 				# self.e_zz_t = d_zz - d_uu
 
-				eta_new = H_inv@d_zz@H_inv.T@P_inv / 2
-				if np.linalg.norm(eta_new) <= eta_bnd:
-					d_eta = (eta_new - eta_t) / self.dt
+				d_eta = (H_inv@d_zz@H_inv.T@P_inv / 2 - eta_t) / self.t
+
+				# alpha = self.f_eta(d_eta_new) / self.f_eta(np.zeros((2,2)))
+				# if stats.uniform.rvs() <= alpha:
+				# 	d_eta = d_eta_new / self.dt
 
 			F_est = F_t - eta_t
 			d_x = F_est@x_t + K_t@(z_t - self.H@x_t)
@@ -87,13 +93,14 @@ class LKF(LSProcess):
 
 	def __call__(self, z_t: np.ndarray):
 		''' Observe through filter ''' 
-		self.r.set_f_params(z_t, self.err_hist, self.F(self.t))
+		_, kf_err_t = self.kf(z_t)
+		self.kf_err_hist.append(kf_err_t)
+		self.r.set_f_params(z_t, self.kf_err_hist, self.F(self.t))
 		self.r.integrate(self.t + self.dt)
 		x_t, P_t, eta_t = self.load_vars(self.r.y)
 		self.x_t, self.P_t, self.eta_t = x_t, P_t, eta_t
 		x_t = np.squeeze(x_t)
 		err_t = z_t - x_t@self.H.T
-		self.err_hist.append(err_t)
 		return x_t.copy(), err_t # x_t variable gets reused somewhere...
 
 	@property
@@ -113,30 +120,28 @@ if __name__ == '__main__':
 
 	set_seed(4001)
 
-	dt = 1e-5
-	n = 2000000
+	dt = 0.001
+	n = 100000
 
 	""" Noisy LTI example """ 
 	# z = Oscillator(dt, 0.0, 1.0)
 	# z = SpiralSink(dt, 0.0, 1.0)
-	# eta_mu, eta_var = 0., 0.1
+	eta_mu, eta_var = 0., 0.1
 	# eta0 = np.random.normal(eta_mu, eta_var, (2, 2))
 	# eta = lambda t: eta0
 	# F_hat = lambda t: z.F(t) + eta(t)
 
 	""" Partially known LTV example """ 
-	z = TimeVarying(dt, 0.0, 1.0, f=1/20)
+	z = TimeVarying(dt, 0.0, 1.0, f=1/30)
 	F_hat = lambda t: z.F(0)
 	eta = lambda t: F_hat(t) - z.F(t)
-	# eta_bnd = 10*max(np.linalg.norm(z.F1 - z.F0), np.linalg.norm(z.F2 - z.F0))
-	eta_bnd = float('inf')
 
 	print(F_hat(0))
-	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.1, eta_bnd=eta_bnd, eps= 3e-3)
+	f = LKF(z.x0, F_hat, z.H, z.Q, z.R, dt, tau=0.1, eta_mu=eta_mu, eta_var=eta_var, eps=1e-2)
 
 	max_err = 10.
-	max_eta_err = 100
-	max_zz = 100. 
+	max_eta_err = 40
+	max_zz = 40. 
 
 	hist_t = []
 	hist_z = []
@@ -173,18 +178,17 @@ if __name__ == '__main__':
 			print('d_zz overflowed!')
 			break
 
-	# start, end = None, 20000 # for case analysis
+	# start, end = -1000, None # for case analysis
 	start, end = None, None # for case analysis
-	every = 100
 
-	hist_t = np.array(hist_t)[start:end:every]
-	hist_z = np.array(hist_z)[start:end:every]
-	hist_x = np.array(hist_x)[start:end:every]
-	hist_err = np.array(hist_err)[start:end:every]
-	hist_eta = np.array(hist_eta)[start:end:every]
-	hist_ezz = np.array(hist_ezz)[start:end:every]
-	hist_pin = np.array(hist_pin)[start:end:every]
-	hist_p = np.array(hist_p)[start:end:every]
+	hist_t = np.array(hist_t)[start:end]
+	hist_z = np.array(hist_z)[start:end]
+	hist_x = np.array(hist_x)[start:end]
+	hist_err = np.array(hist_err)[start:end]
+	hist_eta = np.array(hist_eta)[start:end]
+	hist_ezz = np.array(hist_ezz)[start:end]
+	hist_pin = np.array(hist_pin)[start:end]
+	hist_p = np.array(hist_p)[start:end]
 
 	# pdb.set_trace()
 
@@ -220,14 +224,6 @@ if __name__ == '__main__':
 	axs[1,3].plot(hist_t, var_err_rast[:,2])
 	axs[1,3].plot(hist_t, var_err_rast[:,3])
 	axs[1,3].set_title('Variation error (rasterized)')
-
-	var_err_bs = -np.array(list(map(eta, hist_t)))
-	var_err_rast_bs = var_err_bs.reshape((var_err.shape[0], 4))
-	axs[2,0].plot(hist_t, var_err_rast_bs[:,0])
-	axs[2,0].plot(hist_t, var_err_rast_bs[:,1])
-	axs[2,0].plot(hist_t, var_err_rast_bs[:,2])
-	axs[2,0].plot(hist_t, var_err_rast_bs[:,3])
-	axs[2,0].set_title('Variation error (baseline, rasterized)')
 
 	axs[2,1].plot(hist_t, np.linalg.norm(hist_ezz, axis=(1,2)))
 	axs[2,1].set_title('d_zz norm')
