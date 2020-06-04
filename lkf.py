@@ -12,7 +12,7 @@ import pdb
 import scipy.stats as stats
 
 class LKF(LSProcess):
-	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau: float = float('inf'), eta_bnd: float = float('inf'), eps=1e-4):
+	def __init__(self, x0: np.ndarray, F: Callable, H: np.ndarray, Q: np.ndarray, R: np.ndarray, dt: float, tau=float('inf'), eta_bnd=float('inf'), eps=1e-4, gamma=1.):
 		self.F = F
 		self.H = H
 		self.Q = Q
@@ -21,6 +21,7 @@ class LKF(LSProcess):
 		self.tau = tau
 		self.eps = eps
 		self.eta_bnd = eta_bnd
+		self.gamma = gamma
 		self.ndim = x0.shape[0]
 
 		self.err_hist = []
@@ -53,7 +54,7 @@ class LKF(LSProcess):
 				# d_uu = ((err_t - err_tau)/self.tau)@(E_z.T) + E_z@(((err_t - err_tau)/self.tau).T)
 				# self.e_zz_t = d_zz - d_uu
 
-				eta_new = H_inv@d_zz@H_inv.T@P_inv / 2
+				eta_new = self.gamma * H_inv@d_zz@H_inv.T@P_inv / 2
 				if np.linalg.norm(eta_new) <= eta_bnd:
 					d_eta = (eta_new - eta_t) / self.dt
 
