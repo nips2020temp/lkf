@@ -10,5 +10,5 @@ def set_seed(seed=None):
 	else:
 		torch.manual_seed(seed)
 
-def rmse(arr): 
+def rms(arr): 
 	return np.sqrt(np.mean(arr ** 2))
