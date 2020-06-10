@@ -25,6 +25,7 @@ class LKF(LSProcess):
 		self.ndim = x0.shape[0]
 
 		self.err_hist = []
+		self.P_hist = []
 		self.e_zz_t = np.zeros((self.ndim, self.ndim)) # temp var..
 		self.p_inv_t = np.zeros((self.ndim, self.ndim)) # temp var..
 
@@ -44,7 +45,9 @@ class LKF(LSProcess):
 
 				tau_n = int(self.tau / self.dt)
 				err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[-tau_n][:,np.newaxis]
-				d_zz = (err_t@err_t.T - err_tau@err_tau.T) / self.tau
+				p_t, p_tau = self.P_hist[-1], self.P_hist[-tau_n]
+				d_zz = (err_t@err_t.T - err_tau@err_tau.T) / self.tau - (p_t - p_tau) / self.tau
+				# d_zz = (err_t@err_t.T - err_tau@err_tau.T) 
 				self.e_zz_t = d_zz
 
 				# if np.linalg.norm(d_zz) >= 1.0:
@@ -91,6 +94,7 @@ class LKF(LSProcess):
 		self.r.set_f_params(z_t, self.err_hist, self.F(self.t))
 		self.r.integrate(self.t + self.dt)
 		x_t, P_t, eta_t = self.load_vars(self.r.y)
+		self.P_hist.append(P_t)
 		self.x_t, self.P_t, self.eta_t = x_t, P_t, eta_t
 		x_t = np.squeeze(x_t)
 		err_t = z_t - x_t@self.H.T
