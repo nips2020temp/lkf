@@ -46,7 +46,7 @@ class LKF(LSProcess):
 				tau_n = int(self.tau / self.dt)
 				err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[-tau_n][:,np.newaxis]
 				p_t, p_tau = self.P_hist[-1], self.P_hist[-tau_n]
-				d_zz = (err_t@err_t.T - err_tau@err_tau.T) / self.tau - (p_t - p_tau) / self.tau
+				d_zz = (err_t@err_t.T - err_tau@err_tau.T) / self.tau - self.H@(p_t - p_tau)@self.H.T / self.tau
 				# d_zz = (err_t@err_t.T - err_tau@err_tau.T) 
 				self.e_zz_t = d_zz
 
