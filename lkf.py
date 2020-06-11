@@ -46,16 +46,9 @@ class LKF(LSProcess):
 				tau_n = int(self.tau / self.dt)
 				err_t, err_tau = err_hist[-1][:,np.newaxis], err_hist[-tau_n][:,np.newaxis]
 				p_t, p_tau = self.P_hist[-1], self.P_hist[-tau_n]
-				d_zz = (err_t@err_t.T - err_tau@err_tau.T) / self.tau - self.H@(p_t - p_tau)@self.H.T / self.tau
 				# d_zz = (err_t@err_t.T - err_tau@err_tau.T) 
+				d_zz = (err_t@err_t.T - err_tau@err_tau.T) / self.tau - self.H@(p_t - p_tau)@self.H.T / self.tau
 				self.e_zz_t = d_zz
-
-				# if np.linalg.norm(d_zz) >= 1.0:
-				# 	d_zz = np.zeros((self.ndim, self.ndim))
-
-				# E_z = sum(err_hist[-tau_n:])[:,np.newaxis] / tau_n
-				# d_uu = ((err_t - err_tau)/self.tau)@(E_z.T) + E_z@(((err_t - err_tau)/self.tau).T)
-				# self.e_zz_t = d_zz - d_uu
 
 				eta_new = self.gamma * H_inv@d_zz@H_inv.T@P_inv / 2
 				if np.linalg.norm(eta_new) <= eta_bnd:
