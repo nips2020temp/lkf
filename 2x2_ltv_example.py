@@ -1,5 +1,4 @@
-''' Learning Kalman-Bucy filter
-'''
+""" Partially known LTV example """ 
 
 from systems import *
 from integrator import Integrator
@@ -20,7 +19,6 @@ set_seed(9001)
 dt = 1e-3
 T = 60.
 
-""" Partially known LTV example """ 
 z = TimeVarying(dt, 0.0, 1.0, f=1/20)
 F_hat = lambda t: z.F(0)
 eta = lambda t: F_hat(t) - z.F(t)
@@ -136,5 +134,8 @@ axs[1,4].plot(hist_t, var_err_rast[:,1])
 axs[1,4].plot(hist_t, var_err_rast[:,2])
 axs[1,4].plot(hist_t, var_err_rast[:,3])
 axs[1,4].set_ylim((-.5, .5))
+
+plt.setp(axs[0, 0], ylabel='KF')
+plt.setp(axs[1, 0], ylabel='LKF')
 
 plt.show()

@@ -1,5 +1,4 @@
-''' Learning Kalman-Bucy filter
-'''
+""" Noisy LTI example """ 
 
 from systems import *
 from integrator import Integrator
@@ -20,7 +19,6 @@ set_seed(9001)
 dt = 1e-4
 T = 100.
 
-""" Noisy LTI example """ 
 z = Oscillator(dt, 0.0, 1.0)
 eta_mu, eta_var = 0., 0.03
 eta0 = np.random.normal(eta_mu, eta_var, (2, 2))
